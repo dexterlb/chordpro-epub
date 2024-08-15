@@ -37,8 +37,10 @@ def chordpro2html(song: str, wrap_chords: bool = True) -> str:
     Returns:
         str: the HTML formatted ChordPro file
     """
-    title = "Unknown Title"
-    artist = "Unknown Artist"
+    meta_tags = {
+        'title': "Unknown Title",
+        'artist': "Unknown Artist",
+    }
     output = ""
 
     SongState = Enum("SongState", "NONE VERSE CHORUS TAB BRIDGE")
@@ -136,17 +138,30 @@ def chordpro2html(song: str, wrap_chords: bool = True) -> str:
             logging.info(f"Unhandled form directive: {t.dump()}")
 
     def handle_meta_directive(t):
-        nonlocal title, artist
+        nonlocal meta_tags
         token = t[0].strip().lower()
         arg = t[1].strip()
-        if token in ["title", "t"]:
-            title = arg
+        tag_shorthands = {
+            't': 'title',
+            'a': 'artist',
+            'm': 'meta',
+        }
+        token = tag_shorthands.get(token, token)
+        if token == 'meta':
+            key, arg = arg.split(' ', 1)
+        else:
+            key = token
+
+        meta_tags[key] = arg
+
+        if key == 'title':
             return div("title", arg)
-        elif token in ["artist", "a"]:
-            artist = arg
+        elif key == 'artist':
             return div("artist", arg)
-        else:  # unhandled...
+        elif token != 'meta':  # unhandled...
             logging.info(f"Unhandled meta directive: {t.dump()}")
+
+        return ''
 
     # pyparsing grammar definition: directives
     pp.ParserElement.setDefaultWhitespaceChars("")
@@ -156,7 +171,7 @@ def chordpro2html(song: str, wrap_chords: bool = True) -> str:
     lyric_char_set = pp.pyparsing_unicode.Latin1.printables + "\t "
     chord_char_set = pp.alphanums + " -#(%)/='`´."
 
-    cmd = pp.oneOf("title t artist a")
+    cmd = pp.oneOf("title t artist a meta m")
     arg = pp.SkipTo("}")
     meta_directive = pp.Suppress("{") + cmd + pp.Suppress(":") + arg
     meta_directive.setParseAction(handle_meta_directive)
@@ -203,4 +218,4 @@ def chordpro2html(song: str, wrap_chords: bool = True) -> str:
         output += result[0] + "\n"
 
     # logging.info(output)
-    return output, title, artist
+    return output, meta_tags

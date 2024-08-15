@@ -26,6 +26,7 @@ import logging
 import sys
 from pathlib import Path
 from typing import Optional
+from jinja2 import Template
 
 import typer
 
@@ -51,10 +52,13 @@ def main(
     wrap_chords: bool = typer.Option(
         False, help="If True, chords within the song lyrics will be wrapped in square brackets."
     ),
+    song_title_template: str = typer.Option('{{title}} ({{artist}})', help="Template for generating the song title from ChordPro tags"),
     verbose: bool = False,
 ):
     """Generate an EPUB songbook from a list of songs."""
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
+
+    song_title_templater = Template(song_title_template)
 
     # Add style with default if none is specified
     if css is not None:
@@ -69,8 +73,9 @@ def main(
 
     logging.debug(f"Parsing {chordpro_file}")
     with codecs.open(chordpro_file, "r", "utf-8") as file:
-        body, title, artist = chordpro2html(file.read(), wrap_chords=wrap_chords)
-    content = f"<h3>{title} ({artist})</h3>"
+        body, meta_tags = chordpro2html(file.read(), wrap_chords=wrap_chords)
+    song_title = song_title_templater.render(**meta_tags)
+    content = f"<h3>{song_title}</h3>"
     content += f"<style>{css_content}</style>"
     content += body
 
