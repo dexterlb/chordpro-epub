@@ -28,6 +28,7 @@ import re
 from pathlib import Path
 from typing import Optional
 from unidecode import unidecode
+from jinja2 import Template
 
 import typer
 from ebooklib import epub
@@ -65,6 +66,7 @@ def main(
     book_author: Optional[str] = typer.Option(
         None, help="The author or creator of the EPUB songbook."
     ),
+    song_title_template: str = typer.Option('{{title}} ({{artist}})', help="Template for generating the song title from ChordPro tags"),
     wrap_chords: bool = typer.Option(
         False, help="If True, chords within the song lyrics will be wrapped in square brackets."
     ),
@@ -72,7 +74,8 @@ def main(
 ):
     """Generate an EPUB songbook from a list of songs."""
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
-    song_skeleton = """<h3>{0} ({1})</h3>{2}"""
+    song_skeleton = """<h3>{0}</h3>{1}"""
+    song_title_templater = Template(song_title_template)
 
     ### Starting script per say
     book = epub.EpubBook()
@@ -99,17 +102,18 @@ def main(
 
         logging.debug(f"Parsing {file_name}")
         with codecs.open(file_name, "r", "utf-8") as file:
-            body, title, artist = chordpro2html(file.read(), wrap_chords=wrap_chords)
+            body, meta_tags = chordpro2html(file.read(), wrap_chords=wrap_chords)
 
-        song_title = f"{title} ({artist})"
-        song_filename = fix_filename(f"{title}_{artist}.xhtml")
+        song_title = song_title_templater.render(**meta_tags)
+        song_filename = fix_filename(f"{song_title}.xhtml")
+
         chapter = epub.EpubHtml(
             title=song_title,
             file_name=song_filename,
             lang="en",
         )
         chapter.add_link(href="style.css", rel="stylesheet", type="text/css")
-        chapter.content = song_skeleton.format(title, artist, body)
+        chapter.content = song_skeleton.format(song_title, body)
         book.add_item(chapter)
 
     # Setup TOC
